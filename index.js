@@ -1,7 +1,6 @@
 const express = require('express');
 const cors = require('cors');
 const pino = require('pino');
-const qrcode = require('qrcode-terminal'); // Tambahkan library ini untuk cetak QR manual
 const { 
     default: makeWASocket, 
     useMultiFileAuthState, 
@@ -14,26 +13,45 @@ app.use(express.json());
 
 let sock; 
 
+// ==========================================
+// 1. MASUKKAN NOMOR WA BOT KAMU DI SINI
+// (Gunakan awalan 62 tanpa tanda + atau spasi)
+// Contoh: "6281234567890"
+// ==========================================
+const botNumber = "628xxxxxxxxxx"; 
+
 async function connectToWhatsApp() {
     const { state, saveCreds } = await useMultiFileAuthState('auth_info_baileys');
 
     sock = makeWASocket({
         auth: state,
-        // printQRInTerminal: true, <--- INI SUDAH DIHAPUS
         logger: pino({ level: 'silent' }), 
         browser: ["Ubuntu", "Chrome", "20.0.04"]
     });
 
+    // ==========================================
+    // 2. LOGIKA MEMINTA PAIRING CODE
+    // ==========================================
+    if (!sock.authState.creds.registered) {
+        setTimeout(async () => {
+            try {
+                let code = await sock.requestPairingCode(botNumber);
+                // Format kode jadi XXXX-XXXX biar rapi
+                code = code?.match(/.{1,4}/g)?.join("-") || code;
+                console.log(`\n==========================================`);
+                console.log(`[!] KODE TAUTAN ANDA: ${code}`);
+                console.log(`==========================================\n`);
+                console.log(`Buka WA > Perangkat Tertaut > Tautkan dengan Nomor Telepon Saja\n`);
+            } catch (err) {
+                console.error('Gagal meminta Pairing Code:', err);
+            }
+        }, 3000);
+    }
+
     sock.ev.on('creds.update', saveCreds);
 
     sock.ev.on('connection.update', (update) => {
-        const { connection, lastDisconnect, qr } = update;
-
-        // TANGKAP QR CODE DAN CETAK MANUAL KE TERMINAL
-        if (qr) {
-            qrcode.generate(qr, { small: true });
-            console.log('\n[!] Silakan scan QR Code di atas menggunakan WhatsApp Anda\n');
-        }
+        const { connection, lastDisconnect } = update;
 
         if (connection === 'close') {
             const shouldReconnect = lastDisconnect.error?.output?.statusCode !== DisconnectReason.loggedOut;
@@ -86,7 +104,7 @@ app.post('/send-message', async (req, res) => {
     }
 });
 
-const PORT = 3001; 
+const PORT = process.env.PORT || 3001; 
 app.listen(PORT, () => {
     console.log(`\n==========================================`);
     console.log(`🚀 Server Bot WA berjalan di port ${PORT}`);
