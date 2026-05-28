@@ -16,9 +16,9 @@ let sock;
 // ==========================================
 // 1. MASUKKAN NOMOR WA BOT KAMU DI SINI
 // (Gunakan awalan 62 tanpa tanda + atau spasi)
-// Contoh: "6281234567890"
+// Contoh: "62895806270306"
 // ==========================================
-const botNumber = "628xxxxxxxxxx"; 
+const botNumber = "6283119000958"; // GANTI DENGAN NOMOR WA BOT KAMU
 
 async function connectToWhatsApp() {
     const { state, saveCreds } = await useMultiFileAuthState('auth_info_baileys');
@@ -30,7 +30,7 @@ async function connectToWhatsApp() {
     });
 
     // ==========================================
-    // 2. LOGIKA MEMINTA PAIRING CODE
+    // LOGIKA MEMINTA PAIRING CODE (KODE TAUTAN)
     // ==========================================
     if (!sock.authState.creds.registered) {
         setTimeout(async () => {
@@ -48,8 +48,10 @@ async function connectToWhatsApp() {
         }, 3000);
     }
 
+    // Simpan sesi otomatis
     sock.ev.on('creds.update', saveCreds);
 
+    // Pantau status koneksi
     sock.ev.on('connection.update', (update) => {
         const { connection, lastDisconnect } = update;
 
@@ -69,11 +71,19 @@ async function connectToWhatsApp() {
     });
 }
 
+// Jalankan koneksi WA
 connectToWhatsApp();
 
 // ==========================================
-// API ENDPOINT UNTUK MENERIMA REQUEST DARI NEXT.JS
+// API ROUTES UNTUK EXPRESS SERVER
 // ==========================================
+
+// 1. Endpoint Health-Check (Wajib untuk Railway agar tidak kena SIGTERM)
+app.get('/', (req, res) => {
+    res.status(200).send('Server Bot WA Aktif dan Sehat!');
+});
+
+// 2. Endpoint untuk mengirim pesan dari Webhook Next.js
 app.post('/send-message', async (req, res) => {
     try {
         const { number, message } = req.body;
@@ -82,6 +92,7 @@ app.post('/send-message', async (req, res) => {
             return res.status(400).json({ success: false, message: 'Parameter "number" dan "message" wajib diisi!' });
         }
 
+        // Format nomor agar kompatibel dengan Baileys
         let formattedNumber = number.replace(/\D/g, ''); 
         if (formattedNumber.startsWith('0')) {
             formattedNumber = '62' + formattedNumber.slice(1);
@@ -93,6 +104,7 @@ app.post('/send-message', async (req, res) => {
             return res.status(500).json({ success: false, message: 'Bot WhatsApp belum siap' });
         }
 
+        // Kirim pesan
         await sock.sendMessage(waJid, { text: message });
         
         console.log(`[INFO] Pesan berhasil dikirim ke: ${formattedNumber}`);
@@ -104,8 +116,21 @@ app.post('/send-message', async (req, res) => {
     }
 });
 
+// ==========================================
+// PENGAMAN SERVER ANTI CRASH
+// ==========================================
+process.on('uncaughtException', (err) => {
+    console.error('[ERROR] Uncaught Exception:', err);
+});
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('[ERROR] Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
+// ==========================================
+// JALANKAN SERVER BINDING KE 0.0.0.0
+// ==========================================
 const PORT = process.env.PORT || 3001; 
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
     console.log(`\n==========================================`);
     console.log(`🚀 Server Bot WA berjalan di port ${PORT}`);
     console.log(`==========================================\n`);
